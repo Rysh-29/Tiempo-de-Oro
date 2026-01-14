@@ -1,220 +1,227 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Category, SessionRecord } from './types';
+import { MainCategory, SubCategory, SessionRecord, Segment } from './types';
 import TimerDisplay from './components/TimerDisplay';
 import CategoryButton from './components/CategoryButton';
 import SessionHistory from './components/SessionHistory';
 
-// SVG Icons
+// Iconos actualizados para reflejar la nueva jerarquía
 const Icons = {
   Play: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>,
   Stop: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>,
-  Book: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
-  Video: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>,
-  Edit: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+  Study: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>,
+  Banqueo: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
+  Video: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>,
+  Apuntes: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  Lectura: <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
 };
 
 export default function App() {
-  // State
+  // --- ESTADO ---
   const [isActive, setIsActive] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [currentCategory, setCurrentCategory] = useState<Category>(Category.GENERAL);
+  const [elapsedTime, setElapsedTime] = useState(0); // Tiempo total de la sesión madre
   const [startTime, setStartTime] = useState<number | null>(null);
   const [history, setHistory] = useState<SessionRecord[]>([]);
   
+  // Estado de la jerarquía activa
+  const [activeMainCategory, setActiveMainCategory] = useState<MainCategory | null>(null);
+  const [activeSegments, setActiveSegments] = useState<Segment[]>([]);
+  const [currentSubCategory, setCurrentSubCategory] = useState<SubCategory>(SubCategory.GENERAL);
+
   const timerRef = useRef<number | null>(null);
 
-  // Load persistence
+  // --- PERSISTENCIA ---
   useEffect(() => {
-    const savedHistory = localStorage.getItem('tiempooro_history');
-    if (savedHistory) {
-      setHistory(JSON.parse(savedHistory));
-    }
-
-    const savedState = localStorage.getItem('tiempooro_current_session');
-    if (savedState) {
-      const { start, category } = JSON.parse(savedState);
-      if (start) {
-        // Resume session calculation
-        const now = Date.now();
-        const diff = Math.floor((now - start) / 1000);
-        setStartTime(start);
-        setCurrentCategory(category);
-        setElapsedTime(diff);
-        setIsActive(true);
-      }
-    }
+    const savedHistory = localStorage.getItem('tiempooro_history_v2');
+    if (savedHistory) setHistory(JSON.parse(savedHistory));
   }, []);
 
-  // Timer Logic
+  useEffect(() => {
+    localStorage.setItem('tiempooro_history_v2', JSON.stringify(history));
+  }, [history]);
+
+  // --- LÓGICA DEL CRONÓMETRO ---
   useEffect(() => {
     if (isActive && startTime) {
       timerRef.current = window.setInterval(() => {
-        const now = Date.now();
-        setElapsedTime(Math.floor((now - startTime) / 1000));
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
       }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
     }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [isActive, startTime]);
 
-  // Save active session state for crash recovery
-  useEffect(() => {
-    if (isActive && startTime) {
-      localStorage.setItem('tiempooro_current_session', JSON.stringify({
-        start: startTime,
-        category: currentCategory
-      }));
-    } else {
-      localStorage.removeItem('tiempooro_current_session');
-    }
-  }, [isActive, startTime, currentCategory]);
+  // --- ACCIONES ---
 
-  // Save history
-  useEffect(() => {
-    localStorage.setItem('tiempooro_history', JSON.stringify(history));
-  }, [history]);
-
-  const handleStart = () => {
-    setStartTime(Date.now());
+  // Iniciar una Sesión Madre (ej. Estudio)
+  const handleStartSession = (category: MainCategory) => {
+    const now = Date.now();
+    setStartTime(now);
+    setActiveMainCategory(category);
     setIsActive(true);
-    setCurrentCategory(Category.GENERAL);
+    setElapsedTime(0);
+    
+    // Iniciar el primer segmento automáticamente
+    const firstSegment: Segment = {
+      id: crypto.randomUUID(),
+      subCategory: SubCategory.GENERAL,
+      startTime: now,
+      endTime: null
+    };
+    setActiveSegments([firstSegment]);
+    setCurrentSubCategory(SubCategory.GENERAL);
   };
 
-  const handleStop = () => {
-    if (!startTime) return;
+  // Cambiar de Subcategoría (Cierra la anterior, abre la nueva)
+  const handleSubCategoryChange = (newSub: SubCategory) => {
+    if (newSub === currentSubCategory) return;
     
-    const endTime = Date.now();
+    const now = Date.now();
+    
+    setActiveSegments(prev => {
+      // 1. Finalizar el segmento actual
+      const updatedSegments = prev.map(seg => 
+        seg.endTime === null ? { ...seg, endTime: now } : seg
+      );
+      
+      // 2. Añadir el nuevo segmento
+      const nextSegment: Segment = {
+        id: crypto.randomUUID(),
+        subCategory: newSub,
+        startTime: now,
+        endTime: null
+      };
+      
+      return [...updatedSegments, nextSegment];
+    });
+    
+    setCurrentSubCategory(newSub);
+  };
+
+  // Finalizar Sesión Madre y Guardar Todo
+  const handleStopSession = () => {
+    if (!startTime || !activeMainCategory) return;
+    
+    const now = Date.now();
+    
+    // Cerrar el último segmento activo
+    const finalSegments = activeSegments.map(seg => 
+      seg.endTime === null ? { ...seg, endTime: now } : seg
+    );
+
     const newRecord: SessionRecord = {
       id: crypto.randomUUID(),
-      startTime,
-      endTime,
+      mainCategory: activeMainCategory,
+      startTime: startTime,
+      endTime: now,
       duration: elapsedTime,
-      category: currentCategory,
+      segments: finalSegments,
       date: new Date().toISOString()
     };
 
     setHistory(prev => [newRecord, ...prev]);
     setIsActive(false);
-    setElapsedTime(0);
     setStartTime(null);
-  };
-
-  const handleCategoryChange = (category: Category) => {
-    setCurrentCategory(category);
-  };
-
-  const clearHistory = () => {
-    if(confirm("¿Borrar todo el historial?")) {
-        setHistory([]);
-    }
+    setActiveMainCategory(null);
+    setActiveSegments([]);
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center bg-gray-950 text-gray-100 font-sans selection:bg-amber-500/30">
+    <div className="min-h-screen bg-gray-950 text-gray-100 font-sans">
       
-      {/* Header */}
-      <header className="w-full p-6 flex justify-between items-center z-10">
+      {/* Header Estilo One UI */}
+      <header className="p-6 flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">
+          <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-500">
             Tiempo de Oro
           </h1>
-          <p className="text-xs text-gray-500 font-medium tracking-wide uppercase">Tu recurso más valioso</p>
+          <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Registro Clínico</p>
         </div>
-        <div className="w-10 h-10 rounded-full bg-gray-900 border border-gray-800 flex items-center justify-center shadow-inner">
-          <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-600'}`}></div>
-        </div>
+        <div className={`w-3 h-3 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-800'}`}></div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 w-full max-w-md flex flex-col items-center justify-center relative px-6">
+      <main className="max-w-md mx-auto px-6 pb-24">
         
-        {isActive ? (
-          <div className="w-full flex flex-col items-center animate-in fade-in zoom-in duration-500">
+        {!isActive ? (
+          /* PANTALLA DE INICIO: Selección de Modo */
+          <div className="py-12 flex flex-col items-center">
+            <h2 className="text-gray-400 mb-8 font-medium">¿Qué vas a hacer ahora?</h2>
             
-            {/* Active Session View */}
-            <div className="bg-gray-900/50 backdrop-blur-xl border border-gray-800/50 p-8 rounded-[2.5rem] shadow-2xl w-full mb-8 relative overflow-hidden">
-               {/* Glow effect */}
-               <div className="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
-               
-               <div className="text-center mb-6">
-                 <span className="px-3 py-1 rounded-full bg-gray-800 text-amber-500 text-xs font-bold uppercase tracking-wider border border-gray-700/50">
-                   En Progreso
-                 </span>
-               </div>
+            <button 
+              onClick={() => handleStartSession(MainCategory.ESTUDIO)}
+              className="w-full bg-gray-900 border border-gray-800 p-8 rounded-[2.5rem] flex flex-col items-center group active:scale-95 transition-all shadow-xl"
+            >
+              <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-gray-950 mb-4 shadow-lg shadow-amber-500/20 group-hover:scale-110 transition-transform">
+                {Icons.Study}
+              </div>
+              <span className="text-xl font-bold">Modo Estudio</span>
+              <span className="text-xs text-gray-500 mt-1">Activa Rutina Samsung</span>
+            </button>
 
-               <TimerDisplay seconds={elapsedTime} />
-               
-               <div className="grid grid-cols-3 gap-3 mt-8">
-                 <CategoryButton 
-                    category={Category.BANQUEO} 
-                    isActive={currentCategory === Category.BANQUEO} 
-                    onClick={handleCategoryChange} 
-                    icon={Icons.Book}
-                 />
-                 <CategoryButton 
-                    category={Category.VIDEOS} 
-                    isActive={currentCategory === Category.VIDEOS} 
-                    onClick={handleCategoryChange} 
-                    icon={Icons.Video}
-                 />
-                 <CategoryButton 
-                    category={Category.APUNTES} 
-                    isActive={currentCategory === Category.APUNTES} 
-                    onClick={handleCategoryChange} 
-                    icon={Icons.Edit}
-                 />
+            <div className="grid grid-cols-2 gap-4 mt-4 w-full">
+               <button onClick={() => handleStartSession(MainCategory.EJERCICIO)} className="bg-gray-900/50 p-6 rounded-[2rem] border border-gray-800 text-sm font-bold opacity-60">Ejercicio</button>
+               <button onClick={() => handleStartSession(MainCategory.OCIO)} className="bg-gray-900/50 p-6 rounded-[2rem] border border-gray-800 text-sm font-bold opacity-60">Ocio</button>
+            </div>
+          </div>
+        ) : (
+          /* PANTALLA ACTIVA: Sesión y Subcategorías */
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            <div className="bg-gray-900/80 backdrop-blur-2xl border border-gray-800 p-8 rounded-[3rem] shadow-2xl mb-8">
+               <div className="text-center mb-2">
+                 <span className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-500/60">Sesión de {activeMainCategory}</span>
                </div>
+               
+               <TimerDisplay seconds={elapsedTime} />
+
+               {/* Botones de Subcategoría (Solo si es Estudio) */}
+               {activeMainCategory === MainCategory.ESTUDIO && (
+                 <div className="grid grid-cols-2 gap-3 mt-4">
+                   <button 
+                    onClick={() => handleSubCategoryChange(SubCategory.BANQUEO)}
+                    className={`flex items-center gap-2 p-4 rounded-2xl border transition-all ${currentSubCategory === SubCategory.BANQUEO ? 'bg-amber-500 text-black border-amber-400' : 'bg-gray-800/40 border-gray-700 text-gray-400'}`}
+                   >
+                     {Icons.Banqueo} <span className="text-xs font-bold">Banqueo</span>
+                   </button>
+                   <button 
+                    onClick={() => handleSubCategoryChange(SubCategory.VIDEOS)}
+                    className={`flex items-center gap-2 p-4 rounded-2xl border transition-all ${currentSubCategory === SubCategory.VIDEOS ? 'bg-amber-500 text-black border-amber-400' : 'bg-gray-800/40 border-gray-700 text-gray-400'}`}
+                   >
+                     {Icons.Video} <span className="text-xs font-bold">Videoclase</span>
+                   </button>
+                   <button 
+                    onClick={() => handleSubCategoryChange(SubCategory.APUNTES)}
+                    className={`flex items-center gap-2 p-4 rounded-2xl border transition-all ${currentSubCategory === SubCategory.APUNTES ? 'bg-amber-500 text-black border-amber-400' : 'bg-gray-800/40 border-gray-700 text-gray-400'}`}
+                   >
+                     {Icons.Apuntes} <span className="text-xs font-bold">Apuntes</span>
+                   </button>
+                   <button 
+                    onClick={() => handleSubCategoryChange(SubCategory.LECTURA)}
+                    className={`flex items-center gap-2 p-4 rounded-2xl border transition-all ${currentSubCategory === SubCategory.LECTURA ? 'bg-amber-500 text-black border-amber-400' : 'bg-gray-800/40 border-gray-700 text-gray-400'}`}
+                   >
+                     {Icons.Lectura} <span className="text-xs font-bold">Lectura</span>
+                   </button>
+                 </div>
+               )}
             </div>
 
             <button
-              onClick={handleStop}
-              className="w-full py-5 rounded-[2rem] bg-gradient-to-r from-red-600 to-red-500 text-white font-bold text-lg shadow-lg hover:shadow-red-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+              onClick={handleStopSession}
+              className="w-full py-6 rounded-[2rem] bg-red-500/10 border border-red-500/20 text-red-500 font-black text-lg hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-3"
             >
-              <span className="bg-white/20 p-1 rounded-full">{Icons.Stop}</span>
-              Finalizar Sesión
+              Finalizar {activeMainCategory}
             </button>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center animate-in fade-in zoom-in duration-500 py-12">
-            {/* Idle View - Big Start Button */}
-            <button
-              onClick={handleStart}
-              className="group relative w-64 h-64 rounded-full flex flex-col items-center justify-center transition-all duration-500 hover:scale-105 active:scale-95 touch-manipulation"
-            >
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-gray-800 to-gray-900 shadow-[20px_20px_60px_#02040a,-20px_-20px_60px_#141b2e]"></div>
-              <div className="absolute inset-[3px] rounded-full bg-gray-950 flex items-center justify-center">
-                 <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-              </div>
-              
-              {/* Inner Circle Content */}
-              <div className="z-10 flex flex-col items-center">
-                <div className="w-16 h-16 rounded-full bg-amber-500 text-gray-950 flex items-center justify-center mb-4 shadow-[0_0_30px_rgba(245,158,11,0.4)] group-hover:shadow-[0_0_50px_rgba(245,158,11,0.6)] transition-all duration-500">
-                   {Icons.Play}
-                </div>
-                <span className="text-2xl font-bold text-white tracking-tight">Iniciar</span>
-                <span className="text-sm text-gray-500 mt-1">Sesión</span>
-              </div>
-              
-              {/* Rings */}
-              <div className="absolute inset-0 rounded-full border border-gray-800/50 scale-110 opacity-30"></div>
-              <div className="absolute inset-0 rounded-full border border-dashed border-gray-700/30 scale-125 opacity-20 animate-spin-slow" style={{animationDuration: '60s'}}></div>
-            </button>
-            
-            <p className="mt-12 text-gray-500 text-center max-w-xs text-sm leading-relaxed">
-              "El tiempo es el único capital de aquellos que tienen la fortuna solo como meta."
-            </p>
           </div>
         )}
 
+        {/* Historial (Solo visible si no hay sesión activa) */}
+        {!isActive && (
+          <SessionHistory 
+            sessions={history} 
+            onClear={() => confirm("¿Limpiar historial?") && setHistory([])} 
+          />
+        )}
       </main>
-
-      {/* History Section - Always visible but pushed down when active */}
-      {!isActive && <SessionHistory sessions={history} onClear={clearHistory} />}
-      
     </div>
   );
 }
