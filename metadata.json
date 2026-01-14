@@ -1,0 +1,5 @@
+{
+  "name": "Tiempo de Oro",
+  "description": "Aplicación de registro de tiempo con estilo One UI y persistencia local.",
+  "requestFramePermissions": []
+}
